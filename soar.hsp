@@ -1,0 +1,427 @@
+/*
+	title  : Soar
+	author : gam0022
+*/
+	
+;-----------------------------------------------------------
+; CONSTS
+;-----------------------------------------------------------
+	
+	#define __debug 0
+	#define __hsptv 1
+	
+	#if __hsptv
+		#runtime "hsptv"
+		#regcmd 18
+		#cmd hsptv_send 0
+	#endif
+	
+	#const key_left 1
+	#const key_right 4
+	#const key_space 16
+	#const key_enter 32
+	#const non_triger_key key_left | key_right
+
+	// block	
+	#const bw 150
+	#const bh 16
+	
+	zero = 0.0
+	
+	// ranking
+	notesel rank
+	comment = "いいね！"
+
+	#if __hsptv
+		hsptv_send rank, -1
+		noteget v1, 87
+		least_score = 0 + v1
+	#endif
+	
+	buffer 1
+	tv_dir = dir_exe + "\\hsptv\\"
+	celload tv_dir + "hsptv_img.bmp",1
+	celdiv 1, 64,64
+	
+	buffer 2
+	// normal
+	gradf 0,0, bw,bh, 1, $ffffff, $000
+	// drop
+	#const bw2 bw*2
+	gradf bw2,0, bw,bh, 1, $ff0000, $000
+
+	celdiv 2, 150,16
+	
+	font_theme = "Times New Roman"
+	
+	// SE
+	mmload tv_dir + "\\se_break2.wav", 0
+	mmload tv_dir + "\\se_puyo.wav", 1
+	mmload tv_dir + "\\se_tyuiin.wav", 2
+	
+	// BGM
+	mmload tv_dir + "bgm18.mid", 3, 1
+	
+	gsel 0
+
+;-----------------------------------------------------------
+; INITIALIZE
+;-----------------------------------------------------------
+
+*init
+	
+	mmplay 3
+	
+	clrobj
+	
+	randomize 0
+	
+	// game
+	dim mcnt
+	dim level_
+	; dim scene; 0=>title, 1=>play, 2=>game over
+	dim over_cnt
+	dim score
+	
+	// my
+	mx = 100.0
+	my = 100.0
+	mxv = zero
+	myv = zero
+	dim mframe
+	dim mdirect; 0 => right, 1=> left
+	dim mm
+	
+	// scroll
+	syv = 1
+	sy = zero
+	dim bsy
+
+	// block
+	dim bn
+	dim btype,4; 0=>normal, 1=>move, 2=>drop
+	dim bydt,4; 落下ブロックの落下開始[t]
+	repeat 4
+		bx(bn) = zero + rnd(640-bw)
+		by(bn) = 250 - cnt*128
+		bx_(bn) = bx(bn)
+		;btype(bn) = 0
+		bn++
+	loop
+	
+	dim in
+
+;-----------------------------------------------------------
+; MAIN LOOP
+;-----------------------------------------------------------
+*main
+	redraw 0
+	
+	stick key, non_triger_key
+	
+	//
+	// BACKGROUND
+	//
+	repeat 90
+		pos 64 * (cnt\10), 64 * (cnt/10-1) + sy\64
+		celput 1, 62
+	loop
+		
+	//
+	// MY CHARACTER
+	//
+	
+	// Users Control
+	if (scene&1) {
+		// move
+		if (key & non_triger_key) {
+			mframe ++
+		}
+		if (key & key_left) {
+			mxv -= 2
+			mdirect = 1
+		}
+		if (key & key_right) {
+			mxv += 2
+			dim mdirect
+		}
+
+		// jump
+		if ((key & key_space) * mjump>=1) {
+			mmplay 0
+			myv = -20
+			mjump --
+		}
+	}
+	
+	// playing or gameover
+	if (scene) {
+		// gravity
+		myv = limit(myv+1, -20, 20)
+		mx += mxv
+		my += myv
+		mxv *= 0.6
+	
+		// draw
+		pos mx,my+sy
+		celput 1, 28+mdirect*2 + (mframe/5)\2
+	}
+	
+	//
+	// CONSTRUCT BLOCK
+	//
+	if ( (sy-bsy) >= 128 ) {
+		bsy = sy
+		; 0=>normal, 1=>move, 2=>drop 3=>move&drop
+		btype(bn) = rnd(2 + (level>=2) + (level>=4))
+	
+		; 落下ブロックは連続2つまでしか出現しない（バランス調整のため）
+		if (bdrop_cnt>=2) {
+			btype(bn) = 1
+		}
+		bx(bn) = zero + rnd(640-bw)
+		by(bn) = -200-sy
+		bx_(bn) = bx(bn); 移動ブロックの移動距離
+		bydt(bn) = 0; 落下ブロックのカウンター
+
+		if (btype(bn)&2) {
+			bdrop_cnt ++
+		} else {
+			dim bdrop_cnt
+		}
+	
+		//
+		// CONSTRUCT ITEM
+		//
+		#const not_move $FFFFFFFF ^ 1
+		if( bn\10 ):else {
+			ix(in) = bx(bn) + 30
+			iy(in) = -234-sy
+			iable(in) = 1; 有効
+			; 0=>slow, 1=>fast
+			itype(in) = rnd(2)
+			; ブロックのmove属性を取り除く
+			btype(bn) &= not_move
+			in++
+		}
+	
+		bn++
+	}
+	
+	
+	//
+	// BLOCK
+	//
+	s = limit(bn-10, 0, bn)
+	repeat bn-s, s
+
+		x = bx(cnt) + sin(0.1*mcnt) * 50 * (btype(cnt)&1) * (1 - 2*(cnt\2))
+		y = by(cnt) + (bydt(cnt)>0) * powf(mcnt - bydt(cnt), 2)not_move
+
+		pos x,y+sy
+		celput 2, (btype(cnt) & 2)
+		
+		// 自分との衝突判定
+		if (mx+48>=x & mx+16<=x+bw & my+64>=y & my<=y+bh) {
+			if (myv > 0 & (my + 32<y)) {
+				; 上に着地
+				my = y - 64
+				mjump = 2
+				if ((scene&1) & (cnt > score)) {
+					mmplay 1
+					score = cnt
+				}
+				; 移動ブロックなら、キャラも動かす
+				mx += x - bx_(cnt)
+				; 落下ブロックの処理
+				if ((bydt(cnt) = 0) * (btype(cnt) & 2)) {
+					bydt(cnt) = mcnt
+				}
+			} else {
+				; 下から衝突
+				my = y+bh
+			}
+			dim myv
+		}
+		bx_(cnt) = x
+	loop
+	
+	//
+	// ITEM
+	//
+	s = limit(in-2, 0, in)
+	repeat in-s, s
+		if(iable(cnt)) {
+			pos ix(cnt),iy(cnt)+sy
+			celput 1, 40 + itype(cnt), 0.5, 0.5
+			if ( ((mx+48) >= ix(cnt)) & (mx+16 <= (ix(cnt)+32)) & ((my+64) >= iy(cnt)) & (my <= (iy(cnt)+32)) ) {
+				mmplay 2
+				if (itype(cnt)) {
+					fast_remain += 100
+				} else {
+					slow_remain += 100
+				}
+				iable(cnt) = 0
+			}
+		}
+	loop
+
+	if (scene) {
+		gmode 6, 1,1, 80
+		pget 3200 ;color 255,255,255
+		grect 320,20, 0, 640,40
+		gmode 2
+		pos 20,5
+		font font_theme, 22
+		mes "LEVEL " + level + "    SCORE " + score + "pt"
+	}
+	
+	pget 3200; color 255,255,255
+	
+	;
+	; TITLE
+	;
+	if (scene):else {
+
+		// TITLE
+		text = "Soar"
+		size = 120
+		x = 190
+		y = 20
+		xd = 5
+		gosub *shadow_mes
+	
+		// HOW TO START THE GAME
+		size = 30
+		xd = 2
+		if ((mcnt/100) \ 2) {
+			text = "Push Space Key"
+			x = 220
+			y = 150
+		} else {
+			text = "Jump: Space Key   Move: Cursor Key"
+			x = 97
+			y = 150
+		}
+		gosub *shadow_mes
+	
+		// RANKING
+		gmode 6, 1,1, 80
+		pget 3200; color 255,255,255
+		grect 320,330, 0, 640,220
+		gmode 2
+
+		repeat 30, ((mcnt/200)\3)*30
+				noteget v1, cnt
+				x = powf(0.05*(mcnt\200 - 50)-0.1*(cnt\30), 5)
+				y = ((cnt/3)\10)*20 +230
+				if (cnt\3=2) {
+					font "MS Gothic", 23
+				} else {
+					font font_theme, 20
+				}
+				if cnt\3:else{
+					pos 100-x,y : mes "no."+((cnt/3)+1)
+					v1 += "pt"
+				}
+				pos (cnt\3)*120+160-x,y : mes v1
+		loop
+	
+		if (key & key_space) {
+			scene = 1
+			goto *init
+		}
+	}
+
+	// JUDGE GAME OVER
+	if ((my+sy >= 640) & scene) {
+		scene = 2
+	}
+	
+	//
+	// GAME OVER
+	//
+	if (scene & 2) {
+		x = 70
+		y = 100 - cos(0.1*over_cnt) * powf(0.99, over_cnt) * 150
+		text = "Game Over"
+		size = 100
+		xd = 5
+		gosub *shadow_mes
+	
+		// ランクインした人用
+		if ( (score > least_score) & (over_cnt = 10) ) {
+			font font_theme, 25
+			objmode 2
+			pos 70,300
+			objsize 400,32
+			input comment
+			pos 470,300
+			objsize 100,32
+			button goto "send", *send_comment
+		}
+	
+		// ランク外用
+		if ( (score <= least_score) * ((over_cnt = 500) + (key & key_space)) ) {
+			dim scene
+			goto *init
+		}
+		over_cnt ++
+	}
+	
+	// scroll
+	sy += syv - (slow_remain>0) + (fast_remain>0)
+	
+	// level
+	level_ = level
+	level = mcnt / 1000
+	// level  up
+	if (level > level_) {
+		if ((level\2) & (syv <= 3)) {
+			syv ++
+		}
+	}
+	
+	if (slow_remain) {
+		slow_remain--
+	}
+	if (fast_remain) {
+		fast_remain--
+	}
+	
+	// mcnt
+	mcnt++
+	
+	redraw
+	
+	#if __debug
+		if(key & key_enter) {
+			pget 3200
+			line 320,0, 320,480
+			bmpsave "" + gettime(3)+"."+gettime(4)+"."+gettime(5)+"."+gettime(6)+ ".bmp"
+		}
+	#endif
+	
+	await 30
+	goto *main
+
+// コメント送信
+*send_comment
+	#if __hsptv
+		hsptv_send rank, score, "Lv." + level + " " + comment
+	#endif
+	dim scene
+	goto *init
+	
+*shadow_mes
+	font font_theme, size
+	
+	color 0,0,0
+	pos x,y
+	mes text
+	
+	pget 3200
+	pos x+xd, y
+	mes text
+	
+	return
