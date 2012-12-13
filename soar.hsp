@@ -1,8 +1,15 @@
 /*
 	title  : Soar
 	author : gam0022
-*/
 	
+	commnet:
+	- http://hsp.tv/contest2012/list_s2.html#313
+	- 女の子を落下しないように操作して、
+	  ひたすら上を目指すアクションゲーム。
+	- HSPTV部門参加作品なので、
+	 ショートコーディングしていて読みにくくなってます。
+*/
+
 ;-----------------------------------------------------------
 ; CONSTS
 ;-----------------------------------------------------------
@@ -172,17 +179,17 @@
 	//
 	if ( (sy-bsy) >= 128 ) {
 		bsy = sy
-		; 0=>normal, 1=>move, 2=>drop 3=>move&drop
+		// 0=>normal, 1=>move, 2=>drop 3=>move&drop
 		btype(bn) = rnd(2 + (level>=2) + (level>=4))
 	
-		; 落下ブロックは連続2つまでしか出現しない（バランス調整のため）
+		// 落下ブロックは連続2つまでしか出現しない（バランス調整のため）
 		if (bdrop_cnt>=2) {
 			btype(bn) = 1
 		}
 		bx(bn) = zero + rnd(640-bw)
 		by(bn) = -200-sy
-		bx_(bn) = bx(bn); 移動ブロックの移動距離
-		bydt(bn) = 0; 落下ブロックのカウンター
+		bx_(bn) = bx(bn)// 移動ブロックの移動距離
+		bydt(bn) = 0// 落下ブロックのカウンター
 
 		if (btype(bn)&2) {
 			bdrop_cnt ++
@@ -197,10 +204,10 @@
 		if( bn\10 ):else {
 			ix(in) = bx(bn) + 30
 			iy(in) = -234-sy
-			iable(in) = 1; 有効
-			; 0=>slow, 1=>fast
+			iable(in) = 1// 有効
+			// 0=>slow, 1=>fast
 			itype(in) = rnd(2)
-			; ブロックのmove属性を取り除く
+			// ブロックのmove属性を取り除く
 			btype(bn) &= not_move
 			in++
 		}
@@ -224,21 +231,21 @@
 		// 自分との衝突判定
 		if (mx+48>=x & mx+16<=x+bw & my+64>=y & my<=y+bh) {
 			if (myv > 0 & (my + 32<y)) {
-				; 上に着地
+				// 上に着地
 				my = y - 64
 				mjump = 2
 				if ((scene&1) & (cnt > score)) {
 					mmplay 1
 					score = cnt
 				}
-				; 移動ブロックなら、キャラも動かす
+				// 移動ブロックなら、キャラも動かす
 				mx += x - bx_(cnt)
-				; 落下ブロックの処理
+				// 落下ブロックの処理
 				if ((bydt(cnt) = 0) * (btype(cnt) & 2)) {
 					bydt(cnt) = mcnt
 				}
 			} else {
-				; 下から衝突
+				// 下から衝突
 				my = y+bh
 			}
 			dim myv
@@ -278,9 +285,9 @@
 	
 	pget 3200; color 255,255,255
 	
-	;
-	; TITLE
-	;
+	//
+	// TITLE
+	//
 	if (scene):else {
 
 		// TITLE
